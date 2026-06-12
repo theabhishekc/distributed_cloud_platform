@@ -1,28 +1,53 @@
 # worker/main.py
-import socket
+
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-app = FastAPI(title="MiniCloud Worker Node")
+from worker.health.registrar import build_node_info, start_registration
 
 
-def get_local_ip() -> str:
-    """Get the machine's LAN IP (not 127.0.0.1)."""
-    try:
-        # Connect to an external address to discover which interface is used
-        # This does NOT actually send any data
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
+# ── Build node identity once at startup ──────────────────────────────────────
+#
+# NODE_INFO is created at module level so every part of the worker
+# shares the same node_id and ip — not a new UUID each time someone calls it.
+#
+NODE_INFO = build_node_info()
 
+
+# ── Lifespan: runs startup/shutdown logic ────────────────────────────────────
+#
+# Everything BEFORE yield runs when uvicorn starts.
+# Everything AFTER yield runs when uvicorn shuts down.
+# asyncio.create_task() kicks off registration in the background —
+# the worker immediately starts accepting requests without waiting.
+#
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print(
+        f"[worker] Starting up — node_id={NODE_INFO.node_id}  ip={NODE_INFO.ip}")
+    asyncio.create_task(start_registration(NODE_INFO))
+    yield
+    print(f"[worker] Shutting down — node_id={NODE_INFO.node_id}")
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(title="MiniCloud Worker", lifespan=lifespan)
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health_check():
+    """
+    Simple liveness probe.
+    The master (and you, during manual testing) can call this to confirm
+    the worker process is alive and to check its identity.
+    """
     return {
         "status": "ok",
-        "node": "worker",
-        "ip": get_local_ip()
+        "node_id": NODE_INFO.node_id,
+        "ip": NODE_INFO.ip,
+        "port": NODE_INFO.port,
     }
