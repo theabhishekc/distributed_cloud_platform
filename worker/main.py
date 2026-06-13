@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from worker.health.registrar import build_node_info, start_registration
+from worker.health.heartbeat import start_heartbeat
 
 
 # ── Build node identity once at startup ──────────────────────────────────────
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     print(
         f"[worker] Starting up — node_id={NODE_INFO.node_id}  ip={NODE_INFO.ip}")
     asyncio.create_task(start_registration(NODE_INFO))
+    asyncio.create_task(start_heartbeat(NODE_INFO))
     yield
     print(f"[worker] Shutting down — node_id={NODE_INFO.node_id}")
 
