@@ -1,5 +1,7 @@
 # master/registry/node_registry.py
 
+import json
+import redis
 from typing import Dict, List
 
 from shared.models import (
@@ -9,12 +11,40 @@ from shared.models import (
 
 nodes: Dict[str, NodeInfo] = {}
 
+# Initialize Redis client. For a production app, these values would come from env vars.
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+except Exception as e:
+    print(f"Warning: Failed to initialize Redis client: {e}")
+    redis_client = None
+
+def load_nodes_from_redis():
+    """
+    Load existing nodes from Redis on startup.
+    """
+    if not redis_client:
+        return
+    
+    try:
+        redis_nodes = redis_client.hgetall("nodes")
+        for node_id, node_json in redis_nodes.items():
+            node_data = json.loads(node_json)
+            nodes[node_id] = NodeInfo(**node_data)
+        print(f"Loaded {len(nodes)} nodes from Redis.")
+    except Exception as e:
+        print(f"Error loading nodes from Redis: {e}")
 
 def add_node(node_info: NodeInfo) -> None:
     """
     Add a new node to the registry or update it if it exists.
     """
-    nodes[node_info.id] = node_info
+    nodes[node_info.node_id] = node_info
+    
+    if redis_client:
+        try:
+            redis_client.hset("nodes", node_info.node_id, node_info.model_dump_json())
+        except Exception as e:
+            print(f"Error saving node to Redis: {e}")
 
 
 def remove_node(node_id: str) -> None:
@@ -22,6 +52,12 @@ def remove_node(node_id: str) -> None:
     Remove a node from the registry by its node_id.
     """
     nodes.pop(node_id, None)
+    
+    if redis_client:
+        try:
+            redis_client.hdel("nodes", node_id)
+        except Exception as e:
+            print(f"Error removing node from Redis: {e}")
 
 
 def get_all_nodes() -> List[NodeInfo]:
@@ -58,5 +94,18 @@ def update_node(
     node.ram_percent = heartbeat.ram_percent
     node.active_tasks = heartbeat.active_tasks
     node.status = "healthy"
+    # last_heartbeat will be updated in the caller or here? The request says:
+    # "Updates node's cpu_percent, ram_percent, active_tasks, last_heartbeat = datetime.now()"
+    # But wait, heartbeat payload has a timestamp. Let's use the payload timestamp or datetime.utcnow().
+    # The requirement says: last_heartbeat = datetime.now()
+    # Actually `node.last_heartbeat` should be updated.
+    
+    node.last_heartbeat = heartbeat.timestamp
+    
+    if redis_client:
+        try:
+            redis_client.hset("nodes", node.node_id, node.model_dump_json())
+        except Exception as e:
+            print(f"Error updating node in Redis: {e}")
 
     return True

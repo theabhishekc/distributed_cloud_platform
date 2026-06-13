@@ -22,7 +22,7 @@ def register_node(node: NodeInfo) -> Dict[str, str]:
 
     return {
         "message": "Node registered successfully",
-        "node_id": node.id
+        "node_id": node.node_id
     }
 
 
