@@ -8,6 +8,8 @@ import psutil
 from worker.config import MASTER_BASE_URL
 from shared.models import NodeInfo, HeartbeatPayload
 
+from shared.logger import get_logger
+
 # Initialize CPU measurement comparison times
 psutil.cpu_percent(interval=None)
 
@@ -35,17 +37,18 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
       5. Catches and logs errors without crashing if the request fails.
     """
     url = f"{MASTER_BASE_URL}/heartbeat"
-    print(f"[heartbeat] Starting heartbeat sender to master at {url} (interval: 5s)...")
+    logger = get_logger("heartbeat", node_id=node_info.node_id)
+    logger.info(
+        f"Starting heartbeat sender to master at {url} (interval: 5s)...",
+        extra={"event": "heartbeat_sender_started"}
+    )
 
     while True:
         try:
             # 1. Collect metrics
             cpu, ram = collect_metrics()
             
-            # 2. Print metrics locally for verification
-            print(f"[heartbeat] Collected metrics -> CPU: {cpu:.1f}%, RAM: {ram:.1f}%")
-
-            # 3. Build HeartbeatPayload
+            # 2. Build HeartbeatPayload
             payload = HeartbeatPayload(
                 node_id=node_info.node_id,
                 ip=node_info.ip,
@@ -55,26 +58,38 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
                 timestamp=datetime.utcnow()
             )
 
-            # 4. POST to master
+            # 3. POST to master
             async with httpx.AsyncClient(timeout=3.0) as client:
                 response = await client.post(
                     url,
                     json=payload.model_dump(mode="json")
                 )
                 if response.status_code == 200:
-                    # Successful beat sent
-                    pass
+                    logger.info(
+                        f"Heartbeat sent successfully. Metrics -> CPU: {cpu:.1f}%, RAM: {ram:.1f}%",
+                        extra={"event": "beat_sent", "cpu": cpu, "ram": ram}
+                    )
                 else:
-                    print(
-                        f"[heartbeat] Warning: Master returned status code {response.status_code} for heartbeat"
+                    logger.warning(
+                        f"Master returned status code {response.status_code} for heartbeat",
+                        extra={"event": "beat_warning", "status_code": response.status_code}
                     )
 
         except httpx.ConnectError:
-            print(f"[heartbeat] Error: Master unreachable at {MASTER_BASE_URL}")
+            logger.error(
+                f"Master unreachable at {MASTER_BASE_URL}",
+                extra={"event": "beat_connect_error"}
+            )
         except httpx.TimeoutException:
-            print(f"[heartbeat] Error: Request to master timed out")
+            logger.error(
+                "Request to master timed out",
+                extra={"event": "beat_timeout_error"}
+            )
         except Exception as e:
-            print(f"[heartbeat] Unexpected error in heartbeat loop: {e}")
+            logger.error(
+                f"Unexpected error in heartbeat loop: {e}",
+                extra={"event": "beat_unexpected_error", "error": str(e)}
+            )
 
         # Wait 5 seconds before next heartbeat
         await asyncio.sleep(5)

@@ -51,12 +51,16 @@ def build_node_info() -> NodeInfo:
     )
 
 
+from shared.logger import get_logger
+
+
 async def _try_register(node_info: NodeInfo) -> bool:
     """
     Make a single POST attempt to the master's /nodes/register endpoint.
     Returns True on success, False on any failure.
     """
     url = f"{MASTER_BASE_URL}/nodes/register"
+    logger = get_logger("registrar", node_id=node_info.node_id)
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -67,15 +71,24 @@ async def _try_register(node_info: NodeInfo) -> bool:
             return response.status_code == 200
 
     except httpx.ConnectError:
-        print(f"[registrar] Master unreachable at {MASTER_BASE_URL}")
+        logger.warning(
+            f"Master unreachable at {MASTER_BASE_URL}",
+            extra={"event": "connect_error", "url": url}
+        )
         return False
 
     except httpx.TimeoutException:
-        print(f"[registrar] Request to master timed out")
+        logger.warning(
+            "Request to master timed out",
+            extra={"event": "timeout_error", "url": url}
+        )
         return False
 
     except Exception as e:
-        print(f"[registrar] Unexpected error: {e}")
+        logger.error(
+            f"Unexpected error: {e}",
+            extra={"event": "unexpected_error", "error": str(e)}
+        )
         return False
 
 
@@ -87,19 +100,24 @@ async def start_registration(node_info: NodeInfo) -> None:
     This runs as a background asyncio task — it never blocks
     the worker's API from accepting requests.
     """
-    print(
-        f"[registrar] Starting registration for node {node_info.node_id} at {node_info.ip}")
+    logger = get_logger("registrar", node_id=node_info.node_id)
+    logger.info(
+        f"Starting registration for node {node_info.node_id} at {node_info.ip}",
+        extra={"event": "registration_started"}
+    )
 
     while True:
         success = await _try_register(node_info)
 
         if success:
-            print(
-                f"[registrar] Registered with master as node-{node_info.node_id}")
+            logger.info(
+                f"Registered with master as node-{node_info.node_id}",
+                extra={"event": "registration_success"}
+            )
             return  # done — exit the loop
 
-        print(
-            f"[registrar] Registration failed. "
-            f"Retrying in {REGISTRATION_RETRY_INTERVAL_SECONDS}s..."
+        logger.warning(
+            f"Registration failed. Retrying in {REGISTRATION_RETRY_INTERVAL_SECONDS}s...",
+            extra={"event": "registration_failed_retry", "retry_interval": REGISTRATION_RETRY_INTERVAL_SECONDS}
         )
         await asyncio.sleep(REGISTRATION_RETRY_INTERVAL_SECONDS)

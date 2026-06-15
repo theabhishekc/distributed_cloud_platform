@@ -9,13 +9,16 @@ from shared.models import (
     HeartbeatPayload
 )
 
+from shared.logger import get_logger
+
 nodes: Dict[str, NodeInfo] = {}
+logger = get_logger("node_registry", node_id="master")
 
 # Initialize Redis client. For a production app, these values would come from env vars.
 try:
     redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 except Exception as e:
-    print(f"Warning: Failed to initialize Redis client: {e}")
+    logger.warning(f"Failed to initialize Redis client: {e}", extra={"event": "redis_init_failed", "error": str(e)})
     redis_client = None
 
 def load_nodes_from_redis():
@@ -30,9 +33,9 @@ def load_nodes_from_redis():
         for node_id, node_json in redis_nodes.items():
             node_data = json.loads(node_json)
             nodes[node_id] = NodeInfo(**node_data)
-        print(f"Loaded {len(nodes)} nodes from Redis.")
+        logger.info(f"Loaded {len(nodes)} nodes from Redis.", extra={"event": "redis_load_success", "node_count": len(nodes)})
     except Exception as e:
-        print(f"Error loading nodes from Redis: {e}")
+        logger.error(f"Error loading nodes from Redis: {e}", extra={"event": "redis_load_error", "error": str(e)})
 
 def add_node(node_info: NodeInfo) -> None:
     """
@@ -44,7 +47,7 @@ def add_node(node_info: NodeInfo) -> None:
         try:
             redis_client.hset("nodes", node_info.node_id, node_info.model_dump_json())
         except Exception as e:
-            print(f"Error saving node to Redis: {e}")
+            logger.error(f"Error saving node to Redis: {e}", extra={"event": "redis_save_error", "node_id": node_info.node_id, "error": str(e)})
 
 
 def remove_node(node_id: str) -> None:
@@ -57,7 +60,7 @@ def remove_node(node_id: str) -> None:
         try:
             redis_client.hdel("nodes", node_id)
         except Exception as e:
-            print(f"Error removing node from Redis: {e}")
+            logger.error(f"Error removing node from Redis: {e}", extra={"event": "redis_remove_error", "node_id": node_id, "error": str(e)})
 
 
 def get_all_nodes() -> List[NodeInfo]:
@@ -106,6 +109,6 @@ def update_node(
         try:
             redis_client.hset("nodes", node.node_id, node.model_dump_json())
         except Exception as e:
-            print(f"Error updating node in Redis: {e}")
+            logger.error(f"Error updating node in Redis: {e}", extra={"event": "redis_update_error", "node_id": node.node_id, "error": str(e)})
 
     return True

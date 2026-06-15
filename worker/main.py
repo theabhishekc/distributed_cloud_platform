@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from worker.health.registrar import build_node_info, start_registration
 from worker.health.heartbeat import start_heartbeat
+from shared.logger import get_logger
 
 
 # ── Build node identity once at startup ──────────────────────────────────────
@@ -15,6 +16,7 @@ from worker.health.heartbeat import start_heartbeat
 # shares the same node_id and ip — not a new UUID each time someone calls it.
 #
 NODE_INFO = build_node_info()
+logger = get_logger("lifespan", node_id=NODE_INFO.node_id)
 
 
 # ── Lifespan: runs startup/shutdown logic ────────────────────────────────────
@@ -26,12 +28,17 @@ NODE_INFO = build_node_info()
 #
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print(
-        f"[worker] Starting up — node_id={NODE_INFO.node_id}  ip={NODE_INFO.ip}")
+    logger.info(
+        f"Starting up — node_id={NODE_INFO.node_id} ip={NODE_INFO.ip}",
+        extra={"event": "startup"}
+    )
     asyncio.create_task(start_registration(NODE_INFO))
     asyncio.create_task(start_heartbeat(NODE_INFO))
     yield
-    print(f"[worker] Shutting down — node_id={NODE_INFO.node_id}")
+    logger.info(
+        f"Shutting down — node_id={NODE_INFO.node_id}",
+        extra={"event": "shutdown"}
+    )
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
