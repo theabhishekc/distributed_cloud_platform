@@ -1,10 +1,10 @@
 import asyncio
 from datetime import datetime, timezone
-import logging
 
 from master.registry.node_registry import nodes, redis_client
+from shared.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("health_monitor", node_id="master")
 
 async def monitor_nodes():
     """
@@ -13,9 +13,6 @@ async def monitor_nodes():
     """
     while True:
         try:
-            now = datetime.now(timezone.utc)
-            # Remove tzinfo for comparison if models are using naive datetimes
-            # Actually, `datetime.utcnow()` was used as default. So we use `datetime.utcnow()`
             now = datetime.utcnow()
             
             for node_id, node in list(nodes.items()):
@@ -26,7 +23,10 @@ async def monitor_nodes():
                     delta = now - node.last_heartbeat
                     if delta.total_seconds() > 15:
                         if node.status != "dead":
-                            logger.warning(f"Node {node_id} is dead. Last heartbeat was {delta.total_seconds():.1f}s ago.")
+                            logger.warning(
+                                f"Node {node_id} is dead. Last heartbeat was {delta.total_seconds():.1f}s ago.",
+                                extra={"event": "node_dead", "dead_node_id": node_id, "last_beat_seconds_ago": delta.total_seconds()}
+                            )
                             node.status = "dead"
                             
                             # Update Redis
@@ -34,8 +34,11 @@ async def monitor_nodes():
                                 try:
                                     redis_client.hset("nodes", node.node_id, node.model_dump_json())
                                 except Exception as e:
-                                    logger.error(f"Error updating node status to dead in Redis: {e}")
+                                    logger.error(
+                                        f"Error updating node status to dead in Redis: {e}",
+                                        extra={"event": "redis_status_update_error", "dead_node_id": node.node_id, "error": str(e)}
+                                    )
         except Exception as e:
-            logger.error(f"Error in health monitor: {e}")
+            logger.error(f"Error in health monitor: {e}", extra={"event": "health_monitor_error", "error": str(e)})
             
         await asyncio.sleep(5)
