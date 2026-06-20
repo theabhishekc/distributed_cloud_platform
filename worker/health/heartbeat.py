@@ -43,6 +43,8 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
         extra={"event": "heartbeat_sender_started"}
     )
 
+    consecutive_failures = 0
+
     while True:
         try:
             # 1. Collect metrics
@@ -59,20 +61,23 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
             )
 
             # 3. POST to master
-            async with httpx.AsyncClient(timeout=3.0) as client:
+            # timeout=10s — Windows LAN can spike above 3s (Wi-Fi, Defender, etc.)
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     url,
                     json=payload.model_dump(mode="json")
                 )
                 if response.status_code == 200:
+                    consecutive_failures = 0
                     logger.info(
                         f"Heartbeat sent successfully. Metrics -> CPU: {cpu:.1f}%, RAM: {ram:.1f}%",
                         extra={"event": "beat_sent", "cpu": cpu, "ram": ram}
                     )
                 else:
+                    consecutive_failures += 1
                     logger.warning(
-                        f"Master returned status code {response.status_code} for heartbeat",
-                        extra={"event": "beat_warning", "status_code": response.status_code}
+                        f"Master returned status code {response.status_code} for heartbeat (consecutive failures: {consecutive_failures})",
+                        extra={"event": "beat_warning", "status_code": response.status_code, "consecutive_failures": consecutive_failures}
                     )
 
         except httpx.ConnectError:
@@ -81,9 +86,10 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
                 extra={"event": "beat_connect_error"}
             )
         except httpx.TimeoutException:
+            consecutive_failures += 1
             logger.error(
-                "Request to master timed out",
-                extra={"event": "beat_timeout_error"}
+                f"Heartbeat timed out (timeout=10s, consecutive failures: {consecutive_failures})",
+                extra={"event": "beat_timeout_error", "consecutive_failures": consecutive_failures}
             )
         except Exception as e:
             logger.error(

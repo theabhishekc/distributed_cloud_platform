@@ -63,7 +63,8 @@ async def _try_register(node_info: NodeInfo) -> bool:
     logger = get_logger("registrar", node_id=node_info.node_id)
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # timeout=10s — matches heartbeat timeout; guards against Windows LAN latency spikes
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 url,
                 json=node_info.model_dump(mode="json"),

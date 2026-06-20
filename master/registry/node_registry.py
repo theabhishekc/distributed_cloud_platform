@@ -14,11 +14,24 @@ from shared.logger import get_logger
 nodes: Dict[str, NodeInfo] = {}
 logger = get_logger("node_registry", node_id="master")
 
-# Initialize Redis client. For a production app, these values would come from env vars.
+# Initialize Redis client.
+# protocol=2 → forces RESP2 (works with Redis 5.x and 6.x+).
+# redis-py v4+ defaults to RESP3 (HELLO 3) which breaks on older Redis versions.
 try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_client = redis.Redis(
+        host='localhost',
+        port=6379,
+        db=0,
+        decode_responses=True,
+        protocol=2,          # ← RESP2: compatible with Redis 5.x and above
+    )
+    redis_client.ping()      # validate connection is actually alive at startup
+    logger.info("Redis connected successfully.", extra={"event": "redis_connected"})
 except Exception as e:
-    logger.warning(f"Failed to initialize Redis client: {e}", extra={"event": "redis_init_failed", "error": str(e)})
+    logger.warning(
+        f"Redis unavailable — running without persistence: {e}",
+        extra={"event": "redis_init_failed", "error": str(e)}
+    )
     redis_client = None
 
 def load_nodes_from_redis():

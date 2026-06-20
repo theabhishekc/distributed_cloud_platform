@@ -146,7 +146,8 @@ async def test_worker_heartbeats_update_metrics():
 @pytest.mark.anyio
 async def test_dead_node_detection():
     """
-    Test 3: Stop sending heartbeats, wait 20s (simulated by modifying timestamp), verify node status = 'dead'.
+    Test 3: Stop sending heartbeats, wait 35s (simulated by modifying timestamp), verify node status = 'dead'.
+    Dead threshold is 30s (DEAD_THRESHOLD_SECONDS in health_monitor.py).
     """
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
@@ -163,16 +164,17 @@ async def test_dead_node_detection():
             resp = await client.post("/nodes/register", json=json.loads(node.model_dump_json()))
             assert resp.status_code == 200
 
-            # Stop sending heartbeats and simulate wait of 20 seconds by modifying node's last_heartbeat timestamp in-memory
-            nodes["worker-dead"].last_heartbeat = datetime.utcnow() - timedelta(seconds=20)
+            # Simulate 35 seconds of silence (exceeds the 30s dead threshold)
+            nodes["worker-dead"].last_heartbeat = datetime.utcnow() - timedelta(seconds=35)
 
-            # Wait up to 6 seconds to allow the background health monitor task to complete its next check cycle (runs every 5s)
+            # Wait up to 6 seconds for the background health monitor to run its next check cycle (runs every 5s)
             await asyncio.sleep(6)
 
             # Verify the node status has transitioned to 'dead'
             resp_get = await client.get("/nodes/worker-dead")
             assert resp_get.status_code == 200
             assert resp_get.json()["status"] == "dead"
+
 
 
 @pytest.mark.anyio
