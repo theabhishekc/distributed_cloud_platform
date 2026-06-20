@@ -48,6 +48,7 @@ _EVENT_ICONS = {
     "beat_warning":          "⚠️ ",
     "heartbeat_sender_started": "💓",
     "node_dead":             "💀",
+    "node_registered":       "✅",
     "health_check_done":     "🩺",
     "redis_connected":       "🗄️ ",
     "redis_init_failed":     "⚠️ ",

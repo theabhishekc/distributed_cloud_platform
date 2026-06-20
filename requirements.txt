@@ -1,4 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 redis
+httpx
+psutil
+pytest
+pytest-anyio
+anyio
