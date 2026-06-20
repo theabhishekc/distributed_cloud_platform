@@ -42,6 +42,7 @@ _EVENT_ICONS = {
     "connect_error":         "🔌",
     "timeout_error":         "⏱️ ",
     "beat_sent":             "💓",
+    "beat_received":         "💓",
     "beat_timeout_error":    "⚠️ ",
     "beat_connect_error":    "🔌",
     "beat_warning":          "⚠️ ",
@@ -95,10 +96,10 @@ class PrettyFormatter(logging.Formatter):
         # ── Message ─────────────────────────────────────────────────────────
         message = record.getMessage()
 
-        # For beat_sent events, extract metrics and make a cleaner line
+        # For beat_sent / beat_received events, extract metrics and make a cleaner line
         cpu = getattr(record, "cpu", None)
         ram = getattr(record, "ram", None)
-        if event == "beat_sent" and cpu is not None and ram is not None:
+        if event in ("beat_sent", "beat_received") and cpu is not None and ram is not None:
             message = f"CPU: {_BOLD}{cpu:.1f}%{_RESET}  RAM: {_BOLD}{ram:.1f}%{_RESET}"
 
         # For node_dead, highlight the key number
