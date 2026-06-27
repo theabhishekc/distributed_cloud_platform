@@ -1,3 +1,4 @@
+# ── Week 1 ────────────────────────────────────────────────────────────────────
 fastapi
 uvicorn[standard]
 pydantic
@@ -7,3 +8,17 @@ psutil
 pytest
 pytest-anyio
 anyio
+
+# ── Week 2 ────────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]       # async ORM — requires asyncpg or aiosqlite driver
+asyncpg                   # PostgreSQL async driver (production)
+aiosqlite                 # SQLite async driver (tests only — no PostgreSQL needed)
+docker                    # docker-py SDK for running containers
+alembic                   # DB migrations (use for production; create_all used in dev)
+
+# ── Week 3 ────────────────────────────────────────────────────────────────────
+python-multipart          # Required by FastAPI for multipart/form-data file uploads
+respx                     # httpx mock library for storage integration tests
+
+# ── Week 4 ────────────────────────────────────────────────────────────────────
+prometheus-client         # Prometheus metrics instrumentation
