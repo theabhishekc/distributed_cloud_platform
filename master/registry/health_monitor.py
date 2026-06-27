@@ -57,6 +57,9 @@ async def monitor_nodes():
                 extra={"event": "health_check_done", "healthy": healthy_count, "total": len(nodes)}
             )
 
+            from master.metrics import update_node_metrics
+            update_node_metrics(nodes)
+
         except Exception as e:
             logger.error(f"Error in health monitor: {e}", extra={"event": "health_monitor_error", "error": str(e)})
 

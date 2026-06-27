@@ -63,3 +63,61 @@ class SchedulerDecision(BaseModel):
     chosen_worker_id: str
     reason: str
     score: float
+
+
+# ── Week 3: Storage models ────────────────────────────────────────────────────
+
+class FileChunk(BaseModel):
+    chunk_id:        str
+    file_id:         str
+    chunk_index:     int
+    size_bytes:      int
+    checksum:        str          # MD5 hex digest
+    worker_id:       str          # primary replica worker
+    replica_worker_id: Optional[str] = None  # second replica worker
+
+
+class FileMetadata(BaseModel):
+    file_id:            str
+    filename:           str
+    total_size:         int
+    chunk_count:        int
+    replication_factor: int = 2
+    created_at:         datetime
+    status:             str       # 'available' | 'degraded' | 'lost' | 'deleted'
+
+
+# ── Week 3: Function (Lambda) models ─────────────────────────────────────────
+
+class FunctionDef(BaseModel):
+    function_id: str
+    name:        str
+    code:        str              # Python source as string
+    runtime:     str = "python3.11"
+    created_at:  datetime
+
+
+class InvokeRequest(BaseModel):
+    function_id:      str
+    payload:          dict
+    timeout_seconds:  int = 30
+
+
+class InvokeResult(BaseModel):
+    function_id:  str
+    output:       Optional[str] = None
+    error:        Optional[str] = None
+    duration_ms:  int
+    worker_id:    str
+
+
+# ── Week 4: Log models ────────────────────────────────────────────────────────
+
+class LogEntry(BaseModel):
+    log_id:    str
+    timestamp: datetime
+    level:     str
+    node_id:   str
+    task_id:   Optional[str] = None
+    message:   str
+    extra:     Optional[dict] = None

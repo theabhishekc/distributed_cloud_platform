@@ -50,6 +50,12 @@ async def start_heartbeat(node_info: NodeInfo) -> None:
             # 1. Collect metrics
             cpu, ram = collect_metrics()
             
+            # Update local metrics
+            from worker.metrics import minicloud_worker_local_cpu_percent, minicloud_worker_local_ram_percent, minicloud_worker_local_active_tasks
+            minicloud_worker_local_cpu_percent.set(cpu)
+            minicloud_worker_local_ram_percent.set(ram)
+            minicloud_worker_local_active_tasks.set(node_info.active_tasks)
+            
             # 2. Build HeartbeatPayload
             payload = HeartbeatPayload(
                 node_id=node_info.node_id,

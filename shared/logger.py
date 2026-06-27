@@ -187,6 +187,38 @@ class StructuredLoggerAdapter(logging.LoggerAdapter):
         kwargs["extra"] = extra
         return msg, kwargs
 
+    def log(self, level, msg, *args, **kwargs):
+        msg, kwargs = self.process(msg, kwargs)
+        self.logger.log(level, msg, *args, **kwargs)
+
+        # ── Week 4: Fire-and-forget log aggregation to DB ─────────────────────
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and not loop.is_closed():
+            import uuid
+            from datetime import datetime
+            from shared.log_aggregator import write_log_to_db_fire_and_forget
+            
+            extra = kwargs.get("extra", {})
+            node_id = extra.get("node_id", "unknown")
+            task_id = extra.get("task_id")
+            formatted_msg = str(msg) % args if args else str(msg)
+            
+            log_entry = {
+                "log_id":    str(uuid.uuid4()),
+                "timestamp": datetime.utcnow().isoformat(),
+                "level":     logging.getLevelName(level),
+                "node_id":   node_id,
+                "task_id":   task_id,
+                "message":   formatted_msg,
+                "extra":     extra,
+            }
+            loop.create_task(write_log_to_db_fire_and_forget(log_entry))
+
 
 def get_logger(component: str, node_id: str = "master") -> StructuredLoggerAdapter:
     """
